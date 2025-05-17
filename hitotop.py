@@ -13,11 +13,17 @@ import sys
 import certifi
 import ssl
 
+# 主题模式常量
+THEME_SYSTEM = 0  # 跟随系统
+THEME_DARK = 1    # 深色
+THEME_LIGHT = 2   # 浅色
+
 class HitokotoApp:
     def __init__(self):
         self.window = None
         self.hitokoto_text = "加载中..."
         self.drag_start_pos = None
+        self.theme_mode = THEME_SYSTEM  # 默认跟随系统
         self.setup_window()
         self.setup_menu()
         self.setup_right_click_menu()
@@ -104,6 +110,17 @@ class HitokotoApp:
         )
     
     def update_text_color(self):
+        # 根据主题模式设置颜色
+        if self.theme_mode == THEME_DARK:
+            # 使用深色主题
+            self.text_field.setTextColor_(AppKit.NSColor.whiteColor())
+            return
+        elif self.theme_mode == THEME_LIGHT:
+            # 使用浅色主题
+            self.text_field.setTextColor_(AppKit.NSColor.blackColor())
+            return
+        
+        # 跟随系统主题（默认行为）
         # 获取当前系统主题是否为暗色
         appearance = AppKit.NSAppearance.currentAppearance()
         if appearance is None:
@@ -152,6 +169,38 @@ class HitokotoApp:
         # 添加分隔线
         self.menu.addItem_(AppKit.NSMenuItem.separatorItem())
         
+        # 添加主题子菜单
+        theme_menu = AppKit.NSMenu.alloc().init()
+        
+        # 添加主题选项
+        system_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "跟随系统", "set_theme_system:", ""
+        )
+        system_theme_item.setTarget_(self)
+        theme_menu.addItem_(system_theme_item)
+        
+        dark_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "深色模式", "set_theme_dark:", ""
+        )
+        dark_theme_item.setTarget_(self)
+        theme_menu.addItem_(dark_theme_item)
+        
+        light_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "浅色模式", "set_theme_light:", ""
+        )
+        light_theme_item.setTarget_(self)
+        theme_menu.addItem_(light_theme_item)
+        
+        # 创建主题菜单项并添加子菜单
+        theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "主题设置", None, ""
+        )
+        theme_item.setSubmenu_(theme_menu)
+        self.menu.addItem_(theme_item)
+        
+        # 添加分隔线
+        self.menu.addItem_(AppKit.NSMenuItem.separatorItem())
+        
         # 添加"退出"菜单项
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "退出", "quit:", ""
@@ -183,12 +232,59 @@ class HitokotoApp:
         # 添加分隔线
         self.right_click_menu.addItem_(AppKit.NSMenuItem.separatorItem())
         
+        # 添加主题子菜单
+        theme_menu = AppKit.NSMenu.alloc().init()
+        
+        # 添加主题选项
+        system_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "跟随系统", "set_theme_system:", ""
+        )
+        system_theme_item.setTarget_(self)
+        theme_menu.addItem_(system_theme_item)
+        
+        dark_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "深色模式", "set_theme_dark:", ""
+        )
+        dark_theme_item.setTarget_(self)
+        theme_menu.addItem_(dark_theme_item)
+        
+        light_theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "浅色模式", "set_theme_light:", ""
+        )
+        light_theme_item.setTarget_(self)
+        theme_menu.addItem_(light_theme_item)
+        
+        # 创建主题菜单项并添加子菜单
+        theme_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "主题设置", None, ""
+        )
+        theme_item.setSubmenu_(theme_menu)
+        self.right_click_menu.addItem_(theme_item)
+        
+        # 添加分隔线
+        self.right_click_menu.addItem_(AppKit.NSMenuItem.separatorItem())
+        
         # 添加"退出"菜单项
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "退出", "quit:", ""
         )
         quit_item.setTarget_(self)
         self.right_click_menu.addItem_(quit_item)
+    
+    def set_theme_system_(self, sender):
+        self.theme_mode = THEME_SYSTEM
+        print("已切换到跟随系统主题")
+        self.update_text_color()
+    
+    def set_theme_dark_(self, sender):
+        self.theme_mode = THEME_DARK
+        print("已切换到深色主题")
+        self.update_text_color()
+    
+    def set_theme_light_(self, sender):
+        self.theme_mode = THEME_LIGHT
+        print("已切换到浅色主题")
+        self.update_text_color()
     
     def refresh_(self, sender):
         self.fetch_hitokoto()
@@ -236,6 +332,9 @@ class HitokotoApp:
             event_location = event.locationInWindow()
             window_point = self.window.convertPointToScreen_(event_location)
             
+            # 设置当前主题选项的勾选状态
+            self.update_theme_menu_state()
+            
             # 显示右键菜单
             AppKit.NSMenu.popUpContextMenu_withEvent_forView_(
                 self.right_click_menu,
@@ -245,6 +344,28 @@ class HitokotoApp:
             return None  # 消费事件
             
         return event  # 传递事件给下一个处理程序
+    
+    def update_theme_menu_state(self):
+        """更新主题菜单的选中状态"""
+        # 获取主题子菜单
+        theme_menu = self.right_click_menu.itemWithTitle_("主题设置").submenu()
+        status_theme_menu = self.menu.itemWithTitle_("主题设置").submenu()
+        
+        # 清除所有选项的选中状态
+        for i in range(theme_menu.numberOfItems()):
+            theme_menu.itemAtIndex_(i).setState_(AppKit.NSControlStateValueOff)
+            status_theme_menu.itemAtIndex_(i).setState_(AppKit.NSControlStateValueOff)
+        
+        # 根据当前主题模式设置选中状态
+        if self.theme_mode == THEME_SYSTEM:
+            theme_menu.itemWithTitle_("跟随系统").setState_(AppKit.NSControlStateValueOn)
+            status_theme_menu.itemWithTitle_("跟随系统").setState_(AppKit.NSControlStateValueOn)
+        elif self.theme_mode == THEME_DARK:
+            theme_menu.itemWithTitle_("深色模式").setState_(AppKit.NSControlStateValueOn)
+            status_theme_menu.itemWithTitle_("深色模式").setState_(AppKit.NSControlStateValueOn)
+        elif self.theme_mode == THEME_LIGHT:
+            theme_menu.itemWithTitle_("浅色模式").setState_(AppKit.NSControlStateValueOn)
+            status_theme_menu.itemWithTitle_("浅色模式").setState_(AppKit.NSControlStateValueOn)
     
     def fetch_hitokoto(self):
         try:
